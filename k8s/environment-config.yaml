@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: environment-config
+  labels:
+    app: microservices
+data:
+  # Environment variables shared by all services
+  # This can be modified to switch between environments: development, staging, production
+  ENVIRONMENT: "production"
+
+  # Log levels per environment
+  # These will be used based on the ENVIRONMENT setting
+  DEV_LOG_LEVEL: "debug"
+  STAGING_LOG_LEVEL: "info"
+  PROD_LOG_LEVEL: "warn"
+
+  # Feature flags
+  USE_MOCK_SERVICES: "false"
+  BYPASS_AUTH: "false"

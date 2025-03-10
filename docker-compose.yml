@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: microservices_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: microservices
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservices_network
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_service
+    command: ["./auth"]
+    ports:
+      - "8081:8081"
+      - "9091:9091"
+    depends_on:
+      - postgres
+    environment:
+      - DB_HOST=postgres
+    networks:
+      - microservices_network
+    restart: on-failure
+
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user_service
+    command: ["./user"]
+    ports:
+      - "8082:8082"
+      - "9092:9092"
+    depends_on:
+      - postgres
+      - auth-service
+    environment:
+      - DB_HOST=postgres
+    networks:
+      - microservices_network
+    restart: on-failure
+
+networks:
+  microservices_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

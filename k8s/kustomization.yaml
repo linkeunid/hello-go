@@ -1,0 +1,66 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# List all YAML files to be applied
+resources:
+  - namespace.yaml
+  - environment-config.yaml
+  - postgres.yaml
+  - auth-service.yaml
+  - user-service.yaml
+
+# Set namespace for all resources
+namespace: microservices
+
+# CommonLabels will be added to all resources
+commonLabels:
+  app.kubernetes.io/part-of: microservices
+  app.kubernetes.io/managed-by: kustomize
+
+# Configure ConfigMap generators for different environments
+configMapGenerator:
+  - name: environment-config-development
+    behavior: create
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=debug
+      - USE_MOCK_SERVICES=true
+      - BYPASS_AUTH=false
+
+  - name: environment-config-staging
+    behavior: create
+    literals:
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=info
+      - USE_MOCK_SERVICES=false
+      - BYPASS_AUTH=false
+
+  - name: environment-config-production
+    behavior: create
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=warn
+      - USE_MOCK_SERVICES=false
+      - BYPASS_AUTH=false
+
+# Patch to add resource requests/limits to all Deployments
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: placeholder
+      spec:
+        template:
+          spec:
+            containers:
+            - name: placeholder
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"

@@ -1,0 +1,95 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reference the base resources
+resources:
+  - ../../base
+
+# Set namespace for all resources
+namespace: microservices-prod
+
+# Increase replicas for production
+patches:
+  - target:
+      kind: Deployment
+      name: auth-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  # Increase resource limits for production
+  - target:
+      kind: Deployment
+      name: auth-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+
+# Add production-specific ConfigMap
+configMapGenerator:
+  - name: environment-overlay
+    behavior: create
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=warn
+      - USE_MOCK_SERVICES=false
+      - BYPASS_AUTH=false
+
+# Override ConfigMaps
+patchesStrategicMerge:
+  - |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: auth-service-config
+    data:
+      LOG_LEVEL: "warn"
+      ENVIRONMENT: "production"
+      USE_MOCK_SERVICES: "false"
+  - |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: user-service-config
+    data:
+      LOG_LEVEL: "warn"
+      ENVIRONMENT: "production"
+      USE_MOCK_SERVICES: "false"
+
+# Override Ingress host for production
+patches:
+  - target:
+      kind: Ingress
+      name: auth-service-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.your-domain.com
+  - target:
+      kind: Ingress
+      name: user-service-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.your-domain.com

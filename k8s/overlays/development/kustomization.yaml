@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reference the base resources
+resources:
+  - ../../base
+
+# Set namespace for all resources
+namespace: microservices-dev
+
+# Environment-specific patches
+patches:
+  # Update replica count for development
+  - target:
+      kind: Deployment
+      name: auth-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: user-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+# Add development-specific ConfigMap
+configMapGenerator:
+  - name: environment-overlay
+    behavior: create
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=debug
+      - USE_MOCK_SERVICES=true
+      - BYPASS_AUTH=false
+
+# Override ConfigMaps
+patchesStrategicMerge:
+  - |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: auth-service-config
+    data:
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+      USE_MOCK_SERVICES: "true"
+  - |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: user-service-config
+    data:
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+      USE_MOCK_SERVICES: "true"

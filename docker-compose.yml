@@ -1,19 +1,25 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:latest
-    container_name: microservices_postgres
+  mysql:
+    image: mysql:8.0
+    container_name: microservices_mysql
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: microservices
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: microservices
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
     networks:
       - microservices_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
 
   auth-service:
     build:
@@ -25,9 +31,20 @@ services:
       - "8081:8081"
       - "9091:9091"
     depends_on:
-      - postgres
+      mysql:
+        condition: service_healthy
     environment:
-      - DB_HOST=postgres
+      - DB_DRIVER=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=microservices
+      - DB_PARAMS=charset=utf8mb4&parseTime=True&loc=Local
+      - JWT_SECRET=your-secret-key
+      - JWT_EXPIRATION=24h
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
     networks:
       - microservices_network
     restart: on-failure
@@ -42,10 +59,22 @@ services:
       - "8082:8082"
       - "9092:9092"
     depends_on:
-      - postgres
-      - auth-service
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
     environment:
-      - DB_HOST=postgres
+      - DB_DRIVER=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=microservices
+      - DB_PARAMS=charset=utf8mb4&parseTime=True&loc=Local
+      - JWT_SECRET=your-secret-key
+      - JWT_EXPIRATION=24h
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
     networks:
       - microservices_network
     restart: on-failure
@@ -55,4 +84,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  mysql_data:

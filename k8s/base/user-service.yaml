@@ -5,18 +5,21 @@ metadata:
   labels:
     app: user-service
 data:
+  DB_DRIVER: "mysql"
   USER_SERVICE_PORT: "8082"
   USER_SERVICE_GRPC_PORT: "9092"
   AUTH_SERVICE_GRPC_PORT: "9091"
-  DB_HOST: "postgres-service"
-  DB_PORT: "5432"
-  DB_USER: "postgres"
+  DB_HOST: "mysql-service"
+  DB_PORT: "3306"
+  DB_USER: "root"
   DB_NAME: "microservices"
-  DB_SSL_MODE: "disable"
+  DB_PARAMS: "charset=utf8mb4&parseTime=True&loc=Local"
   JWT_EXPIRATION: "24h"
   LOG_LEVEL: "info"
   SERVICE_DISCOVERY_URL: "service-discovery:8500"
   ENVIRONMENT: "production"
+  USE_MOCK_SERVICES: "false"
+  BYPASS_AUTH: "false"
 ---
 apiVersion: v1
 kind: Secret
@@ -26,7 +29,7 @@ metadata:
     app: user-service
 type: Opaque
 data:
-  DB_PASSWORD: cG9zdGdyZXM= # Base64 encoded "postgres"
+  DB_PASSWORD: cm9vdHBhc3N3b3Jk # Base64 encoded "rootpassword"
   JWT_SECRET: eW91ci1zZWNyZXQta2V5 # Base64 encoded "your-secret-key"
 ---
 apiVersion: apps/v1
@@ -77,18 +80,37 @@ spec:
               port: 8082
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
           livenessProbe:
             httpGet:
               path: /health
               port: 8082
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 3
           volumeMounts:
             - name: logs
               mountPath: /app/logs
       volumes:
         - name: logs
           emptyDir: {}
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.28
+          command:
+            [
+              "sh",
+              "-c",
+              "until nc -z mysql-service 3306; do echo waiting for mysql; sleep 2; done;",
+            ]
+        - name: wait-for-auth-service
+          image: busybox:1.28
+          command:
+            [
+              "sh",
+              "-c",
+              "until nc -z auth-service 9091; do echo waiting for auth service; sleep 2; done;",
+            ]
 ---
 apiVersion: v1
 kind: Service

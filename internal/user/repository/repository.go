@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
@@ -21,10 +21,10 @@ var (
 
 // User represents a user in the database
 type User struct {
-	ID        string `gorm:"primaryKey"`
-	Email     string `gorm:"uniqueIndex"`
-	Password  string
-	Name      string
+	ID        string `gorm:"primaryKey;type:varchar(36)"`
+	Email     string `gorm:"uniqueIndex;type:varchar(100)"`
+	Password  string `gorm:"type:varchar(255)"`
+	Name      string `gorm:"type:varchar(100)"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -62,10 +62,18 @@ func NewUserRepository(cfg *config.Config, logger *zap.Logger) UserRepository {
 		},
 	}
 
-	// Connect to database
-	db, err := gorm.Open(postgres.Open(cfg.Database.GetDSN()), &gorm.Config{
-		Logger: zapAdapter,
-	})
+	var db *gorm.DB
+	var err error
+
+	if cfg.Database.Driver == "mysql" {
+		// Connect to MySQL database
+		db, err = gorm.Open(mysql.Open(cfg.Database.GetDSN()), &gorm.Config{
+			Logger: zapAdapter,
+		})
+	} else {
+		logger.Fatal("Unsupported database driver", zap.String("driver", cfg.Database.Driver))
+	}
+
 	if err != nil {
 		// Log and panic
 		logger.Fatal("Failed to connect to database", zap.Error(err))

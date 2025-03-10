@@ -15,6 +15,7 @@ The architecture follows these key principles:
 - **Clean Architecture**: Each service follows a layered architecture (server → service → repository)
 - **Mock Services**: Support for mock implementations for development and testing
 - **Environment-Based Configuration**: Different settings for development, staging, and production
+- **Multiple Database Support**: Works with both MySQL and PostgreSQL
 
 ## Project Structure
 
@@ -92,7 +93,7 @@ project-root/
     ├── base/                   # Base Kubernetes resources
     │   ├── auth-service.yaml
     │   ├── user-service.yaml
-    │   ├── postgres.yaml
+    │   ├── mysql.yaml          # MySQL database deployment
     │   ├── namespace.yaml
     │   └── kustomization.yaml
     └── overlays/               # Environment-specific overlays
@@ -109,7 +110,7 @@ project-root/
 - Go 1.21+
 - Protocol Buffers Compiler (`protoc`)
 - Docker and Docker Compose (for local development)
-- PostgreSQL (or use Docker Compose)
+- MySQL or PostgreSQL
 - Kubernetes and kubectl (for deployment)
 
 ## Getting Started
@@ -148,8 +149,8 @@ make docker-run
 Or locally:
 
 ```bash
-# Start PostgreSQL
-docker-compose up -d postgres
+# Start the database
+docker-compose up -d mysql
 
 # Start services
 make run
@@ -167,12 +168,13 @@ AUTH_SERVICE_GRPC_PORT=9091
 USER_SERVICE_GRPC_PORT=9092
 
 # Database settings
+DB_DRIVER=mysql              # mysql or postgres
 DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
+DB_PORT=3306                 # 3306 for MySQL, 5432 for PostgreSQL
+DB_USER=root
+DB_PASSWORD=rootpassword
 DB_NAME=microservices
-DB_SSL_MODE=disable
+DB_PARAMS=charset=utf8mb4&parseTime=True&loc=Local  # MySQL-specific params
 
 # JWT settings
 JWT_SECRET=your-secret-key
@@ -188,6 +190,26 @@ SERVICE_DISCOVERY_URL=localhost:8500
 # Mock services (for development and testing)
 USE_MOCK_SERVICES=true      # Set to 'true' to use mock implementations
 BYPASS_AUTH=false           # Set to 'true' to bypass authentication in mock mode
+```
+
+## Database Support
+
+The application supports both MySQL and PostgreSQL databases. You can switch between them by setting the `DB_DRIVER` environment variable.
+
+### MySQL Configuration
+
+```
+DB_DRIVER=mysql
+DB_PORT=3306
+DB_PARAMS=charset=utf8mb4&parseTime=True&loc=Local
+```
+
+### PostgreSQL Configuration
+
+```
+DB_DRIVER=postgres
+DB_PORT=5432
+DB_PARAMS=sslmode=disable
 ```
 
 ## Environment-Based Configuration
@@ -294,6 +316,7 @@ Services communicate with each other using gRPC. The User Service calls the Auth
 - **Structured Logging**: Comprehensive logging with different levels
 - **Configuration**: Environment-based configuration
 - **Mock Services**: In-memory implementations for development
+- **Database Flexibility**: Support for MySQL and PostgreSQL
 - **Validation**: Input validation and error handling
 - **Dockerization**: Containerized for easy deployment
 - **Kubernetes Deployment**: Environment-specific K8s configurations
@@ -352,7 +375,7 @@ kubectl apply -k k8s/overlays/production
 
 The Kubernetes configurations include:
 - Deployments for Auth and User services
-- PostgreSQL StatefulSet with persistent storage
+- MySQL StatefulSet with persistent storage
 - Ingress for external access
 - ConfigMaps for environment-specific settings
 - Secrets for sensitive information

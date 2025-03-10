@@ -46,12 +46,13 @@ func LoadConfig() (*Config, error) {
 			GRPCPort:    getEnvAsInt("USER_SERVICE_GRPC_PORT", 9092),
 		},
 		Database: DatabaseConfig{
+			Driver:   getEnv("DB_DRIVER", "mysql"),
 			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnvAsInt("DB_PORT", 5432),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
+			Port:     getEnvAsInt("DB_PORT", 3306),
+			User:     getEnv("DB_USER", "root"),
+			Password: getEnv("DB_PASSWORD", "rootpassword"),
 			DBName:   getEnv("DB_NAME", "microservices"),
-			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
+			Params:   getEnv("DB_PARAMS", "charset=utf8mb4&parseTime=True&loc=Local"),
 		},
 		Logging: LoggingConfig{
 			Level: logLevel,

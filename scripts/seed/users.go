@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"github.com/linkeunid/hello-go/pkg/config"
@@ -18,10 +18,10 @@ import (
 
 // User represents a user in the database
 type User struct {
-	ID        string `gorm:"primaryKey"`
-	Email     string `gorm:"uniqueIndex"`
-	Password  string
-	Name      string
+	ID        string `gorm:"primaryKey;type:varchar(36)"`
+	Email     string `gorm:"uniqueIndex;type:varchar(100)"`
+	Password  string `gorm:"type:varchar(255)"`
+	Name      string `gorm:"type:varchar(100)"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -54,12 +54,13 @@ func main() {
 	log.Info("Starting user seeder")
 
 	// Connect to database
-	log.Debug("Connecting to database",
+	log.Debug("Connecting to MySQL database",
 		zap.String("host", cfg.Database.Host),
 		zap.Int("port", cfg.Database.Port),
-		zap.String("database", cfg.Database.DBName))
+		zap.String("database", cfg.Database.DBName),
+		zap.String("driver", cfg.Database.Driver))
 
-	db, err := gorm.Open(postgres.Open(cfg.Database.GetDSN()), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(cfg.Database.GetDSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database", zap.Error(err))
 	}

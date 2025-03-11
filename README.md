@@ -107,7 +107,7 @@ project-root/
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.23+
 - Protocol Buffers Compiler (`protoc`)
 - Docker and Docker Compose (for local development)
 - MySQL or PostgreSQL

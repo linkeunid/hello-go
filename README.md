@@ -109,6 +109,8 @@ project-root/
 
 - Go 1.23+
 - Protocol Buffers Compiler (`protoc`)
+
+  You can follow installation instructions from [here](https://grpc.io/docs/protoc-installation/)
 - Docker and Docker Compose (for local development)
 - MySQL or PostgreSQL
 - Kubernetes and kubectl (for deployment)

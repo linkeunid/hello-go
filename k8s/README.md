@@ -1,12 +1,13 @@
 # Kubernetes Deployment Guide
 
-This guide explains how to deploy the microservices application to a Kubernetes cluster, with configurations for different environments.
+This guide explains how to deploy the microservices application to a Kubernetes cluster, with configurations for different environments and database options.
 
 ## Prerequisites
 
-- kubectl (configured to connect to your cluster)
-- kustomize (v3.8.0+)
-- Access to a container registry for your images
+- kubectl (v1.20+)
+- kustomize (v4.0.0+)
+- Access to a Kubernetes cluster
+- Container registry for your images
 
 ## Project Structure
 
@@ -14,178 +15,331 @@ All Kubernetes configuration files are in the `k8s/` directory:
 
 ```
 k8s/
-├── auth-service.yaml    # Auth service deployment, service, and ingress
-├── user-service.yaml    # User service deployment, service, and ingress
-├── postgres.yaml        # PostgreSQL database deployment and service
-├── namespace.yaml       # Namespace definition
-├── environment-config.yaml    # Environment-specific configurations
-└── kustomization.yaml   # Kustomize configuration
+├── base/                   # Base Kubernetes resources
+│   ├── auth-service.yaml   # Auth service deployment and service
+│   ├── user-service.yaml   # User service deployment and service
+│   ├── mysql.yaml          # MySQL database StatefulSet
+│   ├── namespace.yaml
+│   ├── environment-config.yaml
+│   └── kustomization.yaml
+│
+└── overlays/               # Environment-specific overlays
+    ├── development/        # Development environment
+    │   └── kustomization.yaml
+    ├── staging/            # Staging environment
+    │   └── kustomization.yaml
+    └── production/         # Production environment
+        └── kustomization.yaml
 ```
 
-## Available Environments
+## Database Options
 
-The deployment supports three environments:
+The deployment supports both MySQL and PostgreSQL databases:
 
-1. **Development** - For local or dev clusters
-2. **Staging** - Pre-production environment
-3. **Production** - Production environment
+### MySQL Configuration (Default)
 
-Each environment uses different configuration settings like log levels and feature flags.
+The default configuration uses MySQL 8.0 with the following features:
+- Persistent storage using a StatefulSet
+- Proper initialization and health checks
+- UTF-8 character encoding (utf8mb4)
+- Secure credential management through Kubernetes Secrets
 
-## Deployment Instructions
+### PostgreSQL Configuration (Alternative)
 
-### 1. Build and Push Docker Images
-
-First, build your service images and push them to your container registry:
-
-```bash
-# Build images
-docker build -t your-registry/auth-service:latest -f Dockerfile .
-docker build -t your-registry/user-service:latest -f Dockerfile .
-
-# Push to registry
-docker push your-registry/auth-service:latest
-docker push your-registry/user-service:latest
-```
-
-### 2. Update Image References
-
-Before deploying, update the image references in the YAML files to match your registry:
-
-```yaml
-# In auth-service.yaml and user-service.yaml
-image: your-registry/auth-service:latest
-image: your-registry/user-service:latest
-```
-
-### 3. Deploy to a Specific Environment
-
-Use kustomize to deploy to your desired environment:
-
-#### Development Environment
-
-```bash
-kubectl apply -k k8s/overlays/development
-```
-
-#### Staging Environment
-
-```bash
-kubectl apply -k k8s/overlays/staging
-```
-
-#### Production Environment
-
-```bash
-kubectl apply -k k8s/overlays/production
-```
-
-### 4. Verify Deployment
-
-Check that all resources have been created:
-
-```bash
-# Check namespace
-kubectl get namespace microservices
-
-# Check pods
-kubectl get pods -n microservices
-
-# Check services
-kubectl get services -n microservices
-
-# Check deployments
-kubectl get deployments -n microservices
-```
+To use PostgreSQL instead of MySQL:
+1. Replace `mysql.yaml` with `postgres.yaml` in your kustomization.yaml
+2. Update the database environment variables in the service configurations
 
 ## Environment-Specific Configurations
 
-Different environments have different configurations, managed through ConfigMaps:
+The deployment uses Kustomize overlays to manage environment-specific configurations:
 
-### Development
-- LOG_LEVEL: debug
-- USE_MOCK_SERVICES: true (can be enabled for development)
-- BYPASS_AUTH: false
+### Development Environment
+- Single replica per service
+- DEBUG log level
+- Limited resource requests
+- Mock services can be enabled for testing
+- Suitable for local Kubernetes development (minikube, kind, etc.)
 
-### Staging
-- LOG_LEVEL: info
-- USE_MOCK_SERVICES: false
-- BYPASS_AUTH: false
+### Staging Environment
+- Two replicas per service
+- INFO log level
+- Moderate resource allocation
+- Mock services disabled
+- Separate domain (api.staging.your-domain.com)
 
-### Production
-- LOG_LEVEL: warn
-- USE_MOCK_SERVICES: false
-- BYPASS_AUTH: false
+### Production Environment
+- Three or more replicas per service
+- WARN log level (minimal logging)
+- Higher resource limits and requests
+- Production-grade database configuration
+- Production domain (api.your-domain.com)
 
-## Managing Secrets
+## Deployment Process
 
-Sensitive information is stored in Kubernetes Secrets:
+### Step 1: Prepare Your Cluster
 
-- PostgreSQL password
-- JWT secret key
+Create a dedicated namespace for your microservices:
 
-In a real production environment, you should:
-1. Use a secrets management solution (e.g., Vault, AWS Secrets Manager)
-2. Replace the base64-encoded values with proper secrets
-3. Consider using a solution like Sealed Secrets for git-ops
+```bash
+kubectl apply -f k8s/base/namespace.yaml
+```
 
-## Resource Management
+### Step 2: Build and Push Docker Images
 
-The deployment includes resource requests and limits:
+Build your service images and push them to your container registry:
 
-- Microservices:
-  - Requests: 100m CPU, 128Mi memory
-  - Limits: 200m CPU, 256Mi memory
-  
-- PostgreSQL:
-  - Requests: 500m CPU, 512Mi memory
-  - Limits: 1000m CPU, 1Gi memory
+```bash
+# Set your registry and version
+export REGISTRY=your-registry.io
+export VERSION=1.0.0
 
-Adjust these values based on your workload requirements.
+# Auth Service
+docker build -t $REGISTRY/auth-service:$VERSION -f Dockerfile .
+docker push $REGISTRY/auth-service:$VERSION
 
-## Health Checks
+# User Service
+docker build -t $REGISTRY/user-service:$VERSION -f Dockerfile .
+docker push $REGISTRY/user-service:$VERSION
+```
 
-All services include:
-- Readiness probes - to determine when a container is ready to accept traffic
-- Liveness probes - to determine when a container needs to be restarted
+### Step 3: Update Image References
 
-## Ingress Configuration
+Update the image references in your kustomization.yaml files:
 
-The services are exposed through an Ingress resource:
+```yaml
+# In k8s/overlays/[environment]/kustomization.yaml
+images:
+- name: your-registry/auth-service
+  newName: your-registry.io/auth-service
+  newTag: 1.0.0
+- name: your-registry/user-service
+  newName: your-registry.io/user-service
+  newTag: 1.0.0
+```
 
-- Auth Service: https://api.your-domain.com/auth/...
-- User Service: https://api.your-domain.com/users/...
+### Step 4: Update ConfigMaps and Secrets
 
-Update the host and paths in the Ingress resources as needed.
+For production, you should securely manage secrets. Update the secrets in each environment:
 
-## Storage
+```bash
+# Example for creating a secure JWT secret
+kubectl create secret generic auth-secrets -n microservices-prod \
+  --from-literal=JWT_SECRET=$(openssl rand -base64 32) \
+  --dry-run=client -o yaml > jwt-secret.yaml
 
-PostgreSQL uses a PersistentVolumeClaim for data storage. The default configuration:
+# Apply the secret
+kubectl apply -f jwt-secret.yaml
+```
 
-- 10Gi storage
-- Standard storage class
-- ReadWriteOnce access mode
+### Step 5: Deploy to Your Environment
+
+Use kustomize to deploy to your desired environment:
+
+```bash
+# Development
+kubectl apply -k k8s/overlays/development
+
+# Staging
+kubectl apply -k k8s/overlays/staging
+
+# Production
+kubectl apply -k k8s/overlays/production
+```
+
+### Step 6: Verify Deployment
+
+Check that all resources have been created and are running:
+
+```bash
+# List all resources in your namespace
+kubectl get all -n microservices-prod
+
+# Check pods status
+kubectl get pods -n microservices-prod
+
+# Check service endpoints
+kubectl get services -n microservices-prod
+
+# Check deployments
+kubectl get deployments -n microservices-prod
+```
+
+### Step 7: Initialize the Database (First Deployment Only)
+
+For the first deployment, you may need to initialize the database with schema and seed data:
+
+```bash
+# Deploy database initialization job
+kubectl apply -f k8s/init/db-init-job.yaml
+
+# Monitor job progress
+kubectl logs -f job/db-init-job -n microservices-prod
+```
+
+## Scaling
+
+You can scale your services based on load:
+
+```bash
+# Scale auth service to 5 replicas
+kubectl scale deployment auth-service -n microservices-prod --replicas=5
+
+# Scale user service to 5 replicas
+kubectl scale deployment user-service -n microservices-prod --replicas=5
+```
+
+## Monitoring and Logging
+
+### Monitoring with Prometheus and Grafana
+
+The services are configured with Prometheus endpoints for monitoring:
+
+1. Deploy Prometheus and Grafana using Helm:
+   ```bash
+   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+   helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring
+   ```
+
+2. Configure Prometheus to scrape your services by applying service monitors:
+   ```bash
+   kubectl apply -f k8s/monitoring/service-monitors.yaml
+   ```
+
+3. Import the provided Grafana dashboards:
+   ```bash
+   kubectl apply -f k8s/monitoring/grafana-dashboards.yaml
+   ```
+
+### Centralized Logging
+
+For centralized logging, you can use the ELK stack or Loki:
+
+1. Deploy Elasticsearch, Logstash, and Kibana:
+   ```bash
+   kubectl apply -f k8s/logging/elk-stack.yaml
+   ```
+
+2. Or deploy Loki and Grafana:
+   ```bash
+   helm repo add grafana https://grafana.github.io/helm-charts
+   helm install loki grafana/loki-stack -n logging
+   ```
+
+## Database Migration and Backup
+
+### Database Migrations
+
+For database schema migrations, use a Kubernetes Job:
+
+```bash
+# Create a migration job
+kubectl apply -f k8s/migration/migration-job.yaml
+
+# Check migration logs
+kubectl logs -f job/migration-job -n microservices-prod
+```
+
+### Database Backups
+
+Set up regular backups using a CronJob:
+
+```bash
+# Create a backup CronJob
+kubectl apply -f k8s/backup/db-backup-cronjob.yaml
+
+# Verify the schedule
+kubectl get cronjob -n microservices-prod
+```
 
 ## Troubleshooting
 
-If you encounter issues:
+### Common Issues
 
-1. Check pod logs:
+1. **Pods stuck in Pending state**: Check for resource constraints
    ```bash
-   kubectl logs -n microservices <pod-name>
+   kubectl describe pod <pod-name> -n microservices-prod
    ```
 
-2. Check pod description:
+2. **Database connection issues**: Verify database secret and configuration
    ```bash
-   kubectl describe pod -n microservices <pod-name>
+   kubectl logs deployment/auth-service -n microservices-prod
+   kubectl logs deployment/user-service -n microservices-prod
    ```
 
-3. Check service endpoints:
+3. **Services not accessible**: Check ingress configuration
    ```bash
-   kubectl get endpoints -n microservices
+   kubectl get ingress -n microservices-prod
+   kubectl describe ingress -n microservices-prod
    ```
 
-4. Check ingress configuration:
+4. **Init container failures**: Check for database connectivity
    ```bash
-   kubectl describe ingress -n microservices
+   kubectl describe pod <pod-name> -n microservices-prod
+   kubectl logs <pod-name> -c wait-for-mysql -n microservices-prod
    ```
+
+### Debugging Commands
+
+```bash
+# Get detailed pod information
+kubectl describe pod <pod-name> -n microservices-prod
+
+# Check pod logs
+kubectl logs <pod-name> -n microservices-prod
+
+# Check specific container logs
+kubectl logs <pod-name> -c <container-name> -n microservices-prod
+
+# Execute commands in a pod
+kubectl exec -it <pod-name> -n microservices-prod -- /bin/sh
+
+# Port-forward to a service for direct access
+kubectl port-forward service/auth-service 8081:8081 -n microservices-prod
+```
+
+## Clean Up
+
+To remove the deployment:
+
+```bash
+# Remove development environment
+kubectl delete -k k8s/overlays/development
+
+# Remove staging environment
+kubectl delete -k k8s/overlays/staging
+
+# Remove production environment
+kubectl delete -k k8s/overlays/production
+```
+
+## Environment Variables Reference
+
+Here are all the environment variables that can be configured:
+
+### Service Configuration
+- `AUTH_SERVICE_PORT`: HTTP port for Auth service
+- `AUTH_SERVICE_GRPC_PORT`: gRPC port for Auth service
+- `USER_SERVICE_PORT`: HTTP port for User service
+- `USER_SERVICE_GRPC_PORT`: gRPC port for User service
+
+### Database Configuration
+- `DB_DRIVER`: Database driver (mysql or postgres)
+- `DB_HOST`: Database hostname
+- `DB_PORT`: Database port
+- `DB_USER`: Database username
+- `DB_PASSWORD`: Database password
+- `DB_NAME`: Database name
+- `DB_PARAMS`: Database connection parameters
+
+### Security
+- `JWT_SECRET`: Secret key for JWT tokens
+- `JWT_EXPIRATION`: JWT token expiration time
+
+### Logging and Environment
+- `ENVIRONMENT`: Application environment (development, staging, production)
+- `LOG_LEVEL`: Log level (debug, info, warn, error)
+
+### Feature Flags
+- `USE_MOCK_SERVICES`: Enable/disable mock implementations
+- `BYPASS_AUTH`: Bypass authentication (development only)
